@@ -129,7 +129,7 @@ app.post("/api/sheets/write", async (req, res) => {
   }
 });
 
-app.post("/api/shortcuts/write", async (req, res) => {
+const handleShortcutsWrite = async (req, res) => {
   try {
     const authHeader = req.headers.authorization || "";
     const expectedToken = process.env.SHORTCUTS_API_TOKEN;
@@ -200,7 +200,12 @@ app.post("/api/shortcuts/write", async (req, res) => {
     console.error("[shortcuts/write] Error", message);
     return res.status(500).json({ error: message });
   }
-});
+};
+
+app.post(
+  ["/api/shortcuts/write", "/api/shortcuts/write/"],
+  handleShortcutsWrite,
+);
 
 const port = Number(process.env.PORT) || 3000;
 app.listen(port, () => {
