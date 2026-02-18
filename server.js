@@ -161,12 +161,12 @@ const handleShortcutsWrite = async (req, res) => {
     const amount = String(req.body?.amount || "").trim();
     const dateInput = String(req.body?.date || "").trim();
 
-    // console.log("[shortcuts/write] Incoming payload", {
-    //   description,
-    //   category,
-    //   amount,
-    //   dateInput,
-    // });
+    console.log("[shortcuts/write] Incoming payload", {
+      description,
+      category,
+      amount,
+      dateInput,
+    });
 
     if (!description || !category || !amount || !dateInput) {
       return res.status(400).json({
@@ -220,7 +220,7 @@ app.post(
   handleShortcutsWrite,
 );
 
-app.post("/api/sheets/budget", authenticate, async (req, res) => {
+app.get("/api/sheets/budget", authenticate, async (req, res) => {
   try {
     const spreadsheetId = "1PRbVPgAe_EIfxTcJH71T0NJeIugfwf99L8cUWxe1gFI";
     const sheetName = "2026";
@@ -369,7 +369,9 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
 
       if (format.backgroundColor) {
         const bgColor = rgbToCss(format.backgroundColor);
-        if (bgColor) styles.push(`background-color: ${bgColor}`);
+        if (bgColor === "rgb(255, 255, 255)") {
+          styles.push(`background-color: #282a36`);
+        } else if (bgColor) styles.push(`background-color: #ff5555`);
       }
 
       if (format.textFormat) {
@@ -377,7 +379,10 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
 
         if (textFormat.foregroundColor) {
           const color = rgbToCss(textFormat.foregroundColor);
-          if (color) styles.push(`color: ${color}`);
+          const bgColor = rgbToCss(format.backgroundColor);
+          if (bgColor === "rgb(255, 255, 255)") {
+            styles.push(`color: #FFFFFF`);
+          } else if (color) styles.push(`color: ${color}`);
         }
 
         if (textFormat.fontSize) {
@@ -463,7 +468,7 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
               box-shadow: 0 2px 4px rgba(0,0,0,0.1);
             }
             h1 {
-              color: #333;
+              color: white;
               margin-top: 0;
             }
             table {
