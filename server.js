@@ -1,3 +1,11 @@
+/**
+ * Expense Proxy Server
+ * 
+ * A Node.js/Express backend that proxies Google Sheets API operations,
+ * providing endpoints for reading, writing, and displaying budget data
+ * from Apple Shortcuts and other clients.
+ */
+
 const express = require("express");
 const dotenv = require("dotenv");
 const { google } = require("googleapis");
@@ -9,6 +17,13 @@ app.use(express.json());
 
 const SHEETS_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"];
 
+/**
+ * Retrieves an environment variable or throws an error if not found.
+ * 
+ * @param {string} key - The environment variable name
+ * @returns {string} The environment variable value
+ * @throws {Error} If the environment variable is not set
+ */
 const getEnvVar = (key) => {
   const value = process.env[key];
   if (!value) {
@@ -17,7 +32,18 @@ const getEnvVar = (key) => {
   return value;
 };
 
-// Needs documentation
+/**
+ * Express middleware that validates Bearer token authentication.
+ * 
+ * Checks the Authorization header for a Bearer token matching the
+ * SHORTCUTS_API_TOKEN environment variable. This protects all API
+ * endpoints (except /health) from unauthorized access.
+ * 
+ * @param {express.Request} req - Express request object
+ * @param {express.Response} res - Express response object
+ * @param {express.NextFunction} next - Express next middleware function
+ * @returns {express.Response|void} 401 if unauthorized, 500 if misconfigured, or calls next()
+ */
 const authenticate = (req, res, next) => {
   const expectedToken = process.env.SHORTCUTS_API_TOKEN;
   if (!expectedToken) {
@@ -32,6 +58,15 @@ const authenticate = (req, res, next) => {
   return next();
 };
 
+/**
+ * Creates and returns an authenticated Google Sheets API client.
+ * 
+ * Initializes a JWT authentication client using service account credentials
+ * from environment variables and returns a configured Sheets API v4 client.
+ * 
+ * @returns {object} Authenticated Google Sheets API client instance
+ * @throws {Error} If required environment variables are missing
+ */
 const getSheetsClient = () => {
   const clientEmail = getEnvVar("GOOGLE_SHEETS_CLIENT_EMAIL");
   const privateKey = getEnvVar("GOOGLE_SHEETS_PRIVATE_KEY").replace(
@@ -48,7 +83,22 @@ const getSheetsClient = () => {
   return google.sheets({ version: "v4", auth });
 };
 
+/**
+ * Converts various date formats to M/D/YYYY format for Google Sheets.
+ * 
+ * Handles ISO 8601 dates (YYYY-MM-DD), natural language dates, and other
+ * formats that JavaScript's Date parser can understand. Returns the original
+ * string if parsing fails.
+ * 
+ * @param {string} rawDate - The date string to format
+ * @returns {string} Date in M/D/YYYY format, or original string if parsing fails
+ * 
+ * @example
+ * formatDateForSheet('2026-02-18') // Returns '2/18/2026'
+ * formatDateForSheet('February 18, 2026') // Returns '2/18/2026'
+ */
 const formatDateForSheet = (rawDate) => {
+  // Handle ISO 8601 format (YYYY-MM-DD) directly for precision
   if (/^\d{4}-\d{2}-\d{2}/.test(rawDate)) {
     const [year, month, day] = rawDate.split("-").map(Number);
     if (year && month && day) {
@@ -56,6 +106,7 @@ const formatDateForSheet = (rawDate) => {
     }
   }
 
+  // Normalize common date formats (e.g., "Feb 18, 2026 at 3:00 PM" -> "Feb 18, 2026 3:00 PM")
   const normalized = rawDate.replace(" at ", " ");
   const parsed = new Date(normalized);
 
@@ -66,9 +117,19 @@ const formatDateForSheet = (rawDate) => {
     return `${month}/${day}/${year}`;
   }
 
+  // Return original string if all parsing attempts fail
   return rawDate;
 };
 
+/**
+ * Escapes HTML special characters to prevent XSS attacks.
+ * 
+ * Converts potentially dangerous characters (&, <, >, ", ') to their
+ * HTML entity equivalents for safe display in HTML contexts.
+ * 
+ * @param {string|number} text - The text to escape
+ * @returns {string} HTML-safe string
+ */
 const escapeHtml = (text) => {
   const map = {
     "&": "&amp;",
@@ -80,10 +141,28 @@ const escapeHtml = (text) => {
   return String(text).replace(/[&<>"']/g, (char) => map[char]);
 };
 
+/**
+ * Health check endpoint - no authentication required.
+ * 
+ * @route GET /health
+ * @returns {object} 200 - Status object with "ok" status
+ */
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
+/**
+ * Read data from a Google Sheets range.
+ * 
+ * @route POST /api/sheets/read
+ * @security Bearer token required
+ * @param {string} req.body.spreadsheetId - Google Spreadsheet ID
+ * @param {string} req.body.range - A1 notation range (e.g., "Sheet1!A1:D10")
+ * @returns {object} 200 - Object containing values array
+ * @returns {object} 400 - Missing required fields
+ * @returns {object} 401 - Unauthorized
+ * @returns {object} 500 - Server error
+ */
 app.post("/api/sheets/read", authenticate, async (req, res) => {
   try {
     const spreadsheetId = String(req.body?.spreadsheetId || "").trim();
@@ -109,6 +188,19 @@ app.post("/api/sheets/read", authenticate, async (req, res) => {
   }
 });
 
+/**
+ * Append rows to a Google Sheet.
+ * 
+ * @route POST /api/sheets/write
+ * @security Bearer token required
+ * @param {string} req.body.spreadsheetId - Google Spreadsheet ID (optional, uses default if omitted)
+ * @param {string} req.body.range - A1 notation range to append to (e.g., "Sheet1!A:D")
+ * @param {Array<Array>} req.body.values - 2D array of values to append
+ * @returns {object} 200 - Update details (updatedRange, updatedCells, updatedRows, updatedColumns)
+ * @returns {object} 400 - Missing or invalid required fields
+ * @returns {object} 401 - Unauthorized
+ * @returns {object} 500 - Server error
+ */
 app.post("/api/sheets/write", authenticate, async (req, res) => {
   try {
     const range = String(req.body?.range || "").trim();
@@ -155,6 +247,16 @@ app.post("/api/sheets/write", authenticate, async (req, res) => {
   }
 });
 
+/**
+ * Handles transaction logging from Apple Shortcuts.
+ * 
+ * Accepts transaction data (description, category, amount, date) from Apple Shortcuts,
+ * formats the date to M/D/YYYY, and appends it to the Transactions-2026 sheet.
+ * 
+ * @param {express.Request} req - Express request object with transaction data
+ * @param {express.Response} res - Express response object
+ * @returns {Promise<express.Response>} Update details or error
+ */
 const handleShortcutsWrite = async (req, res) => {
   try {
     const description = String(req.body?.description || "").trim();
@@ -215,12 +317,40 @@ const handleShortcutsWrite = async (req, res) => {
   }
 };
 
+/**
+ * Log a transaction from Apple Shortcuts.
+ * 
+ * @route POST /api/shortcuts/write
+ * @route POST /api/shortcuts/write/
+ * @security Bearer token required
+ * @param {string} req.body.description - Transaction description
+ * @param {string} req.body.category - Transaction category (e.g., "Food", "Transport")
+ * @param {string} req.body.amount - Transaction amount as string
+ * @param {string} req.body.date - Transaction date (any format, will be converted to M/D/YYYY)
+ * @returns {object} 200 - Update details (updatedRange, updatedCells, updatedRows, updatedColumns)
+ * @returns {object} 400 - Missing required fields
+ * @returns {object} 401 - Unauthorized
+ * @returns {object} 500 - Server error
+ */
 app.post(
   ["/api/shortcuts/write", "/api/shortcuts/write/"],
   authenticate,
   handleShortcutsWrite,
 );
 
+/**
+ * Display current month's budget data as a styled HTML table.
+ * 
+ * Automatically detects the current month, fetches budget categories (rows 30-38)
+ * and amounts from the corresponding month column in the "2026" sheet, and renders
+ * them as an HTML table with preserved formatting from the Google Sheet.
+ * 
+ * @route GET /api/sheets/budget
+ * @security Bearer token required
+ * @returns {string} 200 - HTML page with styled budget table
+ * @returns {string} 404 - Current month column not found in spreadsheet
+ * @returns {string} 500 - Server error or unable to read spreadsheet
+ */
 app.get("/api/sheets/budget", authenticate, async (req, res) => {
   try {
     const spreadsheetId = "1PRbVPgAe_EIfxTcJH71T0NJeIugfwf99L8cUWxe1gFI";
@@ -243,8 +373,8 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
       });
     }
 
-    const monthNamesRow = headerRows[0] ?? [];
-    const datesRow = headerRows[1] ?? [];
+    const monthNamesRow = headerRows[0] ?? []; // Row 1: Month names (JAN, FEB, MAR, etc.)
+    const datesRow = headerRows[1] ?? []; // Row 2: Dates (e.g., "2/1/2026")
 
     // Determine current month
     const now = new Date();
@@ -268,10 +398,10 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
 
     console.log("[sheets/budget] Current month:", currentMonthName);
 
-    // Find column index for current month
+    // Find column index for current month by searching both rows
     let columnIndex = -1;
 
-    // First try to match by month name in row 1
+    // Strategy 1: Match by month name in row 1 (e.g., "FEB")
     for (let i = 0; i < monthNamesRow.length; i++) {
       const cellValue = String(monthNamesRow[i] || "")
         .trim()
@@ -282,7 +412,7 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
       }
     }
 
-    // If not found, try to match by date in row 2
+    // Strategy 2: If not found, match by date in row 2 (e.g., "2/1/2026")
     if (columnIndex === -1) {
       for (let i = 0; i < datesRow.length; i++) {
         const cellValue = String(datesRow[i] || "").trim();
@@ -329,7 +459,7 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
       `[sheets/budget] Found month column at index ${columnIndex} (${monthColumnLetter})`,
     );
 
-    // Get sheet ID for the "2026" sheet
+    // Get sheet ID for the "2026" sheet (needed for formatting data)
     const spreadsheetMetadata = await sheets.spreadsheets.get({
       spreadsheetId,
     });
@@ -338,7 +468,9 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
     );
     const sheetId = sheet2026?.properties?.sheetId ?? 0;
 
-    // Read data with formatting
+    // Read data with formatting from two ranges:
+    // 1. Column A rows 30-38: Category labels
+    // 2. Current month column rows 30-38: Budget amounts
     const dataResponse = await sheets.spreadsheets.get({
       spreadsheetId,
       ranges: [
@@ -361,13 +493,14 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
       return `rgb(${r}, ${g}, ${b})`;
     };
 
-    // Helper function to extract cell styles
+    // Helper function to extract cell styles from Google Sheets formatting
     const getCellStyle = (cell) => {
       const format = cell?.effectiveFormat;
       if (!format) return "";
 
       const styles = [];
 
+      // Apply background color (with custom dark theme override for white cells)
       if (format.backgroundColor) {
         const bgColor = rgbToCss(format.backgroundColor);
         if (bgColor === "rgb(255, 255, 255)") {
@@ -375,9 +508,11 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
         } else if (bgColor) styles.push(`background-color: #ff5555`);
       }
 
+      // Apply text formatting
       if (format.textFormat) {
         const textFormat = format.textFormat;
 
+        // Apply text color (with custom override for dark theme)
         if (textFormat.foregroundColor) {
           const color = rgbToCss(textFormat.foregroundColor);
           const bgColor = rgbToCss(format.backgroundColor);
@@ -403,6 +538,7 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
         }
       }
 
+      // Apply horizontal alignment
       if (format.horizontalAlignment) {
         const alignment = format.horizontalAlignment.toLowerCase();
         if (alignment !== "left") {
@@ -410,6 +546,7 @@ app.get("/api/sheets/budget", authenticate, async (req, res) => {
         }
       }
 
+      // Apply vertical alignment
       if (format.verticalAlignment) {
         const vAlign = format.verticalAlignment.toLowerCase();
         if (vAlign === "middle") {
