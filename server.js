@@ -209,6 +209,152 @@ app.post(
   handleShortcutsWrite,
 );
 
+app.post("/api/sheets/budget", authenticate, async (req, res) => {
+  try {
+    const spreadsheetId = "1PRbVPgAe_EIfxTcJH71T0NJeIugfwf99L8cUWxe1gFI";
+    const sheetName = "2026";
+
+    console.log("[sheets/budget] Reading budget data for current month");
+
+    const sheets = getSheetsClient();
+
+    // Read rows 1 and 2 to find the current month column
+    const headerResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!A1:Z2`,
+    });
+
+    const headerRows = headerResponse.data.values ?? [];
+    if (headerRows.length < 2) {
+      return res.status(500).json({
+        error: "Unable to read header rows from spreadsheet.",
+      });
+    }
+
+    const monthNamesRow = headerRows[0] ?? [];
+    const datesRow = headerRows[1] ?? [];
+
+    // Determine current month
+    const now = new Date();
+    const currentMonthIndex = now.getMonth(); // 0-11
+    const currentYear = now.getFullYear();
+    const monthNames = [
+      "JAN",
+      "FEB",
+      "MAR",
+      "APR",
+      "MAY",
+      "JUN",
+      "JUL",
+      "AUG",
+      "SEP",
+      "OCT",
+      "NOV",
+      "DEC",
+    ];
+    const currentMonthName = monthNames[currentMonthIndex];
+
+    console.log("[sheets/budget] Current month:", currentMonthName);
+
+    // Find column index for current month
+    let columnIndex = -1;
+
+    // First try to match by month name in row 1
+    for (let i = 0; i < monthNamesRow.length; i++) {
+      const cellValue = String(monthNamesRow[i] || "")
+        .trim()
+        .toUpperCase();
+      if (cellValue === currentMonthName) {
+        columnIndex = i;
+        break;
+      }
+    }
+
+    // If not found, try to match by date in row 2
+    if (columnIndex === -1) {
+      for (let i = 0; i < datesRow.length; i++) {
+        const cellValue = String(datesRow[i] || "").trim();
+        // Parse date like "2/1/2026"
+        const dateParts = cellValue.split("/");
+        if (dateParts.length === 3) {
+          const month = parseInt(dateParts[0], 10);
+          const year = parseInt(dateParts[2], 10);
+          // Check if month matches (month is 1-12 in the date string)
+          if (month === currentMonthIndex + 1 && year === currentYear) {
+            columnIndex = i;
+            break;
+          }
+        }
+      }
+    }
+
+    if (columnIndex === -1) {
+      return res.status(404).json({
+        error: `Could not find column for current month: ${currentMonthName}`,
+      });
+    }
+
+    // Convert column index to letter notation (A=0, B=1, etc.)
+    const getColumnLetter = (index) => {
+      let letter = "";
+      while (index >= 0) {
+        letter = String.fromCharCode((index % 26) + 65) + letter;
+        index = Math.floor(index / 26) - 1;
+      }
+      return letter;
+    };
+
+    const monthColumnLetter = getColumnLetter(columnIndex);
+
+    console.log(
+      `[sheets/budget] Found month column at index ${columnIndex} (${monthColumnLetter})`,
+    );
+
+    // Read column A rows 30-38 for category labels
+    const categoriesResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!A30:A38`,
+    });
+
+    const categoriesData = categoriesResponse.data.values ?? [];
+    const categories = categoriesData.map((row) => String(row[0] || "").trim());
+
+    // Read the month column rows 30-38 for amounts
+    const amountsResponse = await sheets.spreadsheets.values.get({
+      spreadsheetId,
+      range: `${sheetName}!${monthColumnLetter}30:${monthColumnLetter}38`,
+    });
+
+    const amountsData = amountsResponse.data.values ?? [];
+    const amounts = amountsData.map((row) => String(row[0] || "").trim());
+
+    // Combine categories and amounts
+    const data = [];
+    for (let i = 0; i < categories.length; i++) {
+      const category = categories[i];
+      const amount = amounts[i] || "";
+      if (category) {
+        data.push({
+          category,
+          amount,
+        });
+      }
+    }
+
+    console.log("[sheets/budget] Successfully read budget data:", data);
+
+    return res.json({
+      month: currentMonthName,
+      data,
+    });
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Unexpected server error.";
+    console.error("[sheets/budget] Error", message);
+    return res.status(500).json({ error: message });
+  }
+});
+
 const port = Number(process.env.PORT) || 3002;
 app.listen(port, () => {
   console.log(`Server running on http://localhost:${port}`);
