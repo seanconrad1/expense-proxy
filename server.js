@@ -289,9 +289,16 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
     }
 
     if (columnIndex === -1) {
-      return res.status(404).json({
-        error: `Could not find column for current month: ${currentMonthName}`,
-      });
+      return res.status(404).send(`
+        <!DOCTYPE html>
+        <html>
+          <head><title>Budget Data - Error</title></head>
+          <body>
+            <h1>Error</h1>
+            <p>Could not find column for current month: ${currentMonthName}</p>
+          </body>
+        </html>
+      `);
     }
 
     // Convert column index to letter notation (A=0, B=1, etc.)
@@ -310,48 +317,193 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
       `[sheets/budget] Found month column at index ${columnIndex} (${monthColumnLetter})`,
     );
 
-    // Read column A rows 30-38 for category labels
-    const categoriesResponse = await sheets.spreadsheets.values.get({
+    // Get sheet ID for the "2026" sheet
+    const spreadsheetMetadata = await sheets.spreadsheets.get({
       spreadsheetId,
-      range: `${sheetName}!A30:A38`,
+    });
+    const sheet2026 = spreadsheetMetadata.data.sheets?.find(
+      (s) => s.properties?.title === sheetName,
+    );
+    const sheetId = sheet2026?.properties?.sheetId ?? 0;
+
+    // Read data with formatting
+    const dataResponse = await sheets.spreadsheets.get({
+      spreadsheetId,
+      ranges: [
+        `${sheetName}!A30:A38`,
+        `${sheetName}!${monthColumnLetter}30:${monthColumnLetter}38`,
+      ],
+      includeGridData: true,
     });
 
-    const categoriesData = categoriesResponse.data.values ?? [];
-    const categories = categoriesData.map((row) => String(row[0] || "").trim());
+    const categoryRows =
+      dataResponse.data.sheets?.[0]?.data?.[0]?.rowData ?? [];
+    const amountRows =
+      dataResponse.data.sheets?.[0]?.data?.[1]?.rowData ?? [];
 
-    // Read the month column rows 30-38 for amounts
-    const amountsResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range: `${sheetName}!${monthColumnLetter}30:${monthColumnLetter}38`,
-    });
+    // Helper function to convert RGB color to CSS
+    const rgbToCss = (color) => {
+      if (!color) return "";
+      const r = Math.round((color.red ?? 0) * 255);
+      const g = Math.round((color.green ?? 0) * 255);
+      const b = Math.round((color.blue ?? 0) * 255);
+      return `rgb(${r}, ${g}, ${b})`;
+    };
 
-    const amountsData = amountsResponse.data.values ?? [];
-    const amounts = amountsData.map((row) => String(row[0] || "").trim());
+    // Helper function to extract cell styles
+    const getCellStyle = (cell) => {
+      const format = cell?.effectiveFormat;
+      if (!format) return "";
 
-    // Combine categories and amounts
-    const data = [];
-    for (let i = 0; i < categories.length; i++) {
-      const category = categories[i];
-      const amount = amounts[i] || "";
-      if (category) {
-        data.push({
-          category,
-          amount,
-        });
+      const styles = [];
+
+      if (format.backgroundColor) {
+        const bgColor = rgbToCss(format.backgroundColor);
+        if (bgColor) styles.push(`background-color: ${bgColor}`);
       }
+
+      if (format.textFormat) {
+        const textFormat = format.textFormat;
+
+        if (textFormat.foregroundColor) {
+          const color = rgbToCss(textFormat.foregroundColor);
+          if (color) styles.push(`color: ${color}`);
+        }
+
+        if (textFormat.fontSize) {
+          styles.push(`font-size: ${textFormat.fontSize}pt`);
+        }
+
+        if (textFormat.bold) {
+          styles.push("font-weight: bold");
+        }
+
+        if (textFormat.italic) {
+          styles.push("font-style: italic");
+        }
+
+        if (textFormat.fontFamily) {
+          styles.push(`font-family: "${textFormat.fontFamily}"`);
+        }
+      }
+
+      if (format.horizontalAlignment) {
+        const alignment = format.horizontalAlignment.toLowerCase();
+        if (alignment !== "left") {
+          styles.push(`text-align: ${alignment}`);
+        }
+      }
+
+      if (format.verticalAlignment) {
+        const vAlign = format.verticalAlignment.toLowerCase();
+        if (vAlign === "middle") {
+          styles.push("vertical-align: middle");
+        } else if (vAlign !== "bottom") {
+          styles.push(`vertical-align: ${vAlign}`);
+        }
+      }
+
+      return styles.join("; ");
+    };
+
+    // Build HTML table
+    let htmlRows = "";
+    const maxRows = Math.max(categoryRows.length, amountRows.length);
+
+    for (let i = 0; i < maxRows; i++) {
+      const categoryCell = categoryRows[i]?.values?.[0];
+      const amountCell = amountRows[i]?.values?.[0];
+
+      const categoryValue = categoryCell?.formattedValue ?? "";
+      const amountValue = amountCell?.formattedValue ?? "";
+
+      if (!categoryValue) continue;
+
+      const categoryStyle = getCellStyle(categoryCell);
+      const amountStyle = getCellStyle(amountCell);
+
+      htmlRows += `
+        <tr>
+          <td style="${categoryStyle}">${categoryValue}</td>
+          <td style="${amountStyle}">${amountValue}</td>
+        </tr>`;
     }
 
-    console.log("[sheets/budget] Successfully read budget data:", data);
+    console.log("[sheets/budget] Successfully read budget data");
 
-    return res.json({
-      month: currentMonthName,
-      data,
-    });
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="UTF-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1.0">
+          <title>Budget Data - ${currentMonthName}</title>
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 20px;
+              background-color: #f5f5f5;
+            }
+            .container {
+              max-width: 800px;
+              margin: 0 auto;
+              background-color: white;
+              padding: 20px;
+              border-radius: 8px;
+              box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            }
+            h1 {
+              color: #333;
+              margin-top: 0;
+            }
+            table {
+              width: 100%;
+              border-collapse: collapse;
+              margin-top: 20px;
+            }
+            td {
+              padding: 8px 12px;
+              border: 1px solid #ddd;
+            }
+            tr:hover {
+              background-color: #f9f9f9;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Budget for ${currentMonthName}</h1>
+            <table>
+              <thead>
+                <tr>
+                  <th style="text-align: left; padding: 8px 12px; border: 1px solid #ddd; background-color: #f0f0f0;">Category</th>
+                  <th style="text-align: left; padding: 8px 12px; border: 1px solid #ddd; background-color: #f0f0f0;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${htmlRows}
+              </tbody>
+            </table>
+          </div>
+        </body>
+      </html>
+    `;
+
+    return res.send(html);
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unexpected server error.";
     console.error("[sheets/budget] Error", message);
-    return res.status(500).json({ error: message });
+    return res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Budget Data - Error</title></head>
+        <body>
+          <h1>Error</h1>
+          <p>${message}</p>
+        </body>
+      </html>
+    `);
   }
 });
 
