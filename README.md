@@ -462,4 +462,6 @@ This application can be deployed to any Node.js hosting platform. Here are setup
 
 ---
 
-This project is not licensed.
+## License
+
+This project is unlicensed and provided as-is without any warranty. You are free to use, modify, and distribute this code for any purpose, but the author provides no guarantees or support.
