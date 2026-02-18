@@ -161,12 +161,12 @@ const handleShortcutsWrite = async (req, res) => {
     const amount = String(req.body?.amount || "").trim();
     const dateInput = String(req.body?.date || "").trim();
 
-    console.log("[shortcuts/write] Incoming payload", {
-      description,
-      category,
-      amount,
-      dateInput,
-    });
+    // console.log("[shortcuts/write] Incoming payload", {
+    //   description,
+    //   category,
+    //   amount,
+    //   dateInput,
+    // });
 
     if (!description || !category || !amount || !dateInput) {
       return res.status(400).json({
