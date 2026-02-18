@@ -1,36 +1,60 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Expense Proxy: A Google Sheets API Integration Backend
 
-## Getting Started
+This is a Node.js/Express backend that simplifies accessing and manipulating Google Sheets data. It is designed to work with a Google Service Account and features endpoints for reading ranges, appending rows, and logging data via Apple Shortcuts with Bearer token authentication.
 
-First, run the development server:
+## Features
+- Authenticates using a Google Service Account (`credentials.json` and `.env` file required).
+- Supports the following:
+  - **Read Ranges**: Fetch data from specified sheets ranges.
+  - **Append Rows**: Add new data rows dynamically.
+  - **Apple Shortcuts Support**: Accept transactions and log them directly to Google Sheets.
 
+## Requirements
+- Node.js (v16+ recommended)
+- Google Service Account JSON credentials
+- `.env` file for configuration
+
+## Installation
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/seanconrad1/expense-proxy.git
+   cd expense-proxy
+   ```
+
+2. Install dependencies:
+   ```bash
+   npm install
+   ```
+
+3. Set up the `.env` file:
+   ```env
+   SHEETS_ID=<Your Google Sheets ID>
+   CLIENT_EMAIL=<Service Account Email>
+   PRIVATE_KEY=<Your Private Account Key>
+   ```
+   *(Visit Google Cloud Console to obtain these credentials).*
+
+## Usage
+
+### Development
+
+Run the development server:
 ```bash
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Visit `http://localhost:3000` to access the app.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+### Endpoints
+| Method | Endpoint          | Description             |
+|--------|-------------------|-------------------------|
+| GET    | `/read-range`     | Fetch data from Sheets. |
+| POST   | `/append-row`     | Add new row to Sheets.  |
+| POST   | `/log-shortcut`   | Log Apple Shortcuts data.| 
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Deployment
+Use services like Heroku, Vercel, or AWS to host your backend. Ensure environment variables are securely configured on the deployment platform.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## License
+This project is not licensed.
