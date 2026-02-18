@@ -17,6 +17,20 @@ const getEnvVar = (key) => {
   return value;
 };
 
+const authenticate = (req, res, next) => {
+  const expectedToken = process.env.SHORTCUTS_API_TOKEN;
+  if (!expectedToken) {
+    return res
+      .status(500)
+      .json({ error: "Server misconfigured: missing SHORTCUTS_API_TOKEN." });
+  }
+  const authHeader = req.headers.authorization || "";
+  if (authHeader !== `Bearer ${expectedToken}`) {
+    return res.status(401).json({ error: "Unauthorized" });
+  }
+  return next();
+};
+
 const getSheetsClient = () => {
   const clientEmail = getEnvVar("GOOGLE_SHEETS_CLIENT_EMAIL");
   const privateKey = getEnvVar("GOOGLE_SHEETS_PRIVATE_KEY").replace(
@@ -58,7 +72,7 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.post("/api/sheets/read", async (req, res) => {
+app.post("/api/sheets/read", authenticate, async (req, res) => {
   try {
     const spreadsheetId = String(req.body?.spreadsheetId || "").trim();
     const range = String(req.body?.range || "").trim();
@@ -83,7 +97,7 @@ app.post("/api/sheets/read", async (req, res) => {
   }
 });
 
-app.post("/api/sheets/write", async (req, res) => {
+app.post("/api/sheets/write", authenticate, async (req, res) => {
   try {
     const range = String(req.body?.range || "").trim();
     const values = req.body?.values;
@@ -131,19 +145,6 @@ app.post("/api/sheets/write", async (req, res) => {
 
 const handleShortcutsWrite = async (req, res) => {
   try {
-    const authHeader = req.headers.authorization || "";
-    const expectedToken = process.env.SHORTCUTS_API_TOKEN;
-
-    if (!expectedToken) {
-      return res
-        .status(500)
-        .json({ error: "Server misconfigured: missing SHORTCUTS_API_TOKEN." });
-    }
-
-    if (authHeader !== `Bearer ${expectedToken}`) {
-      return res.status(401).json({ error: "Unauthorized" });
-    }
-
     const description = String(req.body?.description || "").trim();
     const category = String(req.body?.category || "").trim();
     const amount = String(req.body?.amount || "").trim();
@@ -204,6 +205,7 @@ const handleShortcutsWrite = async (req, res) => {
 
 app.post(
   ["/api/shortcuts/write", "/api/shortcuts/write/"],
+  authenticate,
   handleShortcutsWrite,
 );
 
