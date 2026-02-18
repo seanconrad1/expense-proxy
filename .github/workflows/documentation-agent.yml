@@ -1,0 +1,29 @@
+name: Documentation Agent
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  documentation:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Copilot Coding Agent
+        uses: github/copilot-coding-agent-action@v1
+        with:
+          agent: documentation-engineer
+          task: |
+            Review the changes in this pull request.
+            Add or improve:
+            - Code comments
+            - Docstrings
+            - README updates if needed
+            Do not modify business logic.
