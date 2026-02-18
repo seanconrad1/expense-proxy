@@ -3,7 +3,7 @@ name: Documentation Agent (Copilot)
 on:
   pull_request:
     types: [opened, synchronize]
-
+# adding a quick comment here to test the workflow trigger
 jobs:
   assign_to_copilot:
     runs-on: ubuntu-latest
