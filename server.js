@@ -68,6 +68,17 @@ const formatDateForSheet = (rawDate) => {
   return rawDate;
 };
 
+const escapeHtml = (text) => {
+  const map = {
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    '"': "&quot;",
+    "'": "&#039;",
+  };
+  return String(text).replace(/[&<>"']/g, (char) => map[char]);
+};
+
 app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
@@ -295,7 +306,7 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
           <head><title>Budget Data - Error</title></head>
           <body>
             <h1>Error</h1>
-            <p>Could not find column for current month: ${currentMonthName}</p>
+            <p>Could not find column for current month: ${escapeHtml(currentMonthName)}</p>
           </body>
         </html>
       `);
@@ -424,8 +435,8 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
 
       htmlRows += `
         <tr>
-          <td style="${categoryStyle}">${categoryValue}</td>
-          <td style="${amountStyle}">${amountValue}</td>
+          <td style="${categoryStyle}">${escapeHtml(categoryValue)}</td>
+          <td style="${amountStyle}">${escapeHtml(amountValue)}</td>
         </tr>`;
     }
 
@@ -437,7 +448,7 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
         <head>
           <meta charset="UTF-8">
           <meta name="viewport" content="width=device-width, initial-scale=1.0">
-          <title>Budget Data - ${currentMonthName}</title>
+          <title>Budget Data - ${escapeHtml(currentMonthName)}</title>
           <style>
             body {
               font-family: Arial, sans-serif;
@@ -465,14 +476,14 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
               padding: 8px 12px;
               border: 1px solid #ddd;
             }
-            tr:hover {
-              background-color: #f9f9f9;
+            tr:hover td {
+              filter: brightness(0.95);
             }
           </style>
         </head>
         <body>
           <div class="container">
-            <h1>Budget for ${currentMonthName}</h1>
+            <h1>Budget for ${escapeHtml(currentMonthName)}</h1>
             <table>
               <thead>
                 <tr>
@@ -500,7 +511,7 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
         <head><title>Budget Data - Error</title></head>
         <body>
           <h1>Error</h1>
-          <p>${message}</p>
+          <p>${escapeHtml(message)}</p>
         </body>
       </html>
     `);
