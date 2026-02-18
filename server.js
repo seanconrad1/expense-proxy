@@ -17,6 +17,8 @@ const getEnvVar = (key) => {
   return value;
 };
 
+// Testing out new action on PR
+
 // Needs documentation
 const authenticate = (req, res, next) => {
   const expectedToken = process.env.SHORTCUTS_API_TOKEN;
