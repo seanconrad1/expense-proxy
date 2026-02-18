@@ -1,27 +1,56 @@
-name: Documentation Agent
+name: Documentation Agent (Copilot)
 
 on:
   pull_request:
     types: [opened, synchronize]
 
 jobs:
-  documentation:
+  assign_to_copilot:
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
-      pull-requests: write
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Create issue for docs updates and assign to Copilot coding agent
+        env:
+          GH_TOKEN: ${{ secrets.COPILOT_PAT }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+        run: |
+          set -euo pipefail
 
-      - name: Run Copilot Coding Agent
-        uses: github/copilot-coding-agent-action@v1
-        with:
-          agent: documentation-engineer
-          task: |
-            Review the changes in this pull request.
-            Add or improve:
-            - Code comments
-            - Docstrings
-            - README updates if needed
-            Do not modify business logic.
+          title="Docs pass for PR #${PR_NUMBER}"
+          body=$(cat <<'EOF'
+          Please review the referenced PR and improve documentation only:
+          - Add or improve code comments/docstrings (no logic changes)
+          - Update README.md and related docs if needed
+          - Keep content scannable; use relative links for repo files; descriptive links + alt text for images
+
+          PR:
+          EOF
+          )
+          body="${body} ${PR_URL}"
+
+          # 1) Create an issue assigned to Copilot SWE agent bot, specifying your custom agent
+          curl -sS -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            "https://api.github.com/repos/${REPO}/issues" \
+            -d @- <<JSON
+          {
+            "title": "${title}",
+            "body": $(python - <<'PY'
+            import json, os
+            print(json.dumps(os.environ["body"]))
+            PY
+            ),
+            "assignees": ["copilot-swe-agent[bot]"],
+            "agent_assignment": {
+              "target_repo": "${REPO}",
+              "base_branch": "main",
+              "custom_instructions": "Documentation-only changes. Do not modify business logic.",
+              "custom_agent": "documentation-engineer",
+              "model": ""
+            }
+          }
+          JSON
