@@ -349,8 +349,7 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
 
     const categoryRows =
       dataResponse.data.sheets?.[0]?.data?.[0]?.rowData ?? [];
-    const amountRows =
-      dataResponse.data.sheets?.[0]?.data?.[1]?.rowData ?? [];
+    const amountRows = dataResponse.data.sheets?.[0]?.data?.[1]?.rowData ?? [];
 
     // Helper function to convert RGB color to CSS
     const rgbToCss = (color) => {
@@ -453,7 +452,7 @@ app.post("/api/sheets/budget", authenticate, async (req, res) => {
             body {
               font-family: Arial, sans-serif;
               margin: 20px;
-              background-color: #f5f5f5;
+              background-color: #282a36;
             }
             .container {
               max-width: 800px;
