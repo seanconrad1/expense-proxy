@@ -6,6 +6,7 @@ A Node.js/Express backend that acts as a proxy to Google Sheets. It authenticate
 
 - **Google Sheets Integration** — Read and write data to any Google Sheet via the Sheets API v4.
 - **Apple Shortcuts Support** — Dedicated endpoint to log transactions (description, category, amount, date) directly from an Apple Shortcut.
+- **Budget Display** — View current month's budget categories and amounts in a stylized HTML table with preserved sheet formatting.
 - **Bearer Token Auth** — All API endpoints (except health check) require a `Bearer` token via the `Authorization` header.
 - **Date Formatting** — Automatically converts dates (ISO 8601 or natural language) to `M/D/YYYY` format for your sheet.
 
@@ -177,6 +178,40 @@ curl -X POST http://localhost:3002/api/shortcuts/write \
   "updatedColumns": 4
 }
 ```
+
+---
+
+### `POST /api/sheets/budget`
+
+Display the current month's budget data in a stylized HTML table with formatting preserved from the Google Sheet.
+
+**Request Body:**
+None required. The endpoint automatically determines the current month and fetches budget data from rows 30-38 of the "2026" sheet.
+
+**Example:**
+```bash
+curl -X POST http://localhost:3002/api/sheets/budget \
+  -H "Authorization: Bearer <token>" \
+  -H "Content-Type: application/json"
+```
+
+**Response:**
+Returns an HTML page with a styled table showing budget categories and amounts for the current month. The table preserves all formatting from the Google Sheet including:
+- Background and text colors
+- Font families, sizes, bold, and italic styling
+- Text alignment
+
+**Features:**
+- Automatically detects current month (e.g., FEB for February)
+- Reads category labels from column A, rows 30-38
+- Reads budget amounts from the current month's column, rows 30-38
+- Applies cell formatting from the original sheet
+- Responsive design with hover effects
+- XSS protection through HTML escaping
+
+**Error Responses:**
+- `404` - Current month column not found in the spreadsheet
+- `500` - Server error or unable to read from spreadsheet
 
 ---
 
