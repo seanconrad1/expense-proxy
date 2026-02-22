@@ -72,25 +72,6 @@ app.get("/health", (_req, res) => {
   res.json({ status: "ok" });
 });
 
-app.get("/api/budget", authenticate, async (_req, res) => {
-  try {
-    const spreadsheetId = "1PRbVPgAe_EIfxTcJH71T0NJeIugfwf99L8cUWxe1gFI";
-    const range = "Transactions-2026!A31:B40";
-
-    const sheets = getSheetsClient();
-    const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
-      range,
-    });
-
-    return res.json({ values: response.data.values ?? [] });
-  } catch (error) {
-    const message =
-      error instanceof Error ? error.message : "Unexpected server error.";
-    return res.status(500).json({ error: message });
-  }
-});
-
 app.post("/api/sheets/read", authenticate, async (req, res) => {
   try {
     const spreadsheetId = String(req.body?.spreadsheetId || "").trim();
