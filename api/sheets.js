@@ -8,7 +8,7 @@ const router = express.Router();
  *
  * @route POST /api/sheets/read
  * @security Bearer token required
- * @param {string} req.body.spreadsheetId - Google Spreadsheet ID
+ * @param {string} spreadsheetId - Google Spreadsheet ID
  * @param {string} req.body.range - A1 notation range (e.g., "Sheet1!A1:D10")
  * @returns {object} 200 - Object containing values array
  * @returns {object} 400 - Missing required fields
@@ -28,7 +28,7 @@ router.post("/api/sheets/read", authenticate, async (req, res) => {
 
     const sheets = getSheetsClient();
     const response = await sheets.spreadsheets.values.get({
-      spreadsheetId,
+      spreadsheetId: req.body.spreadsheetId,
       range,
     });
 
@@ -108,22 +108,25 @@ router.post("/api/sheets/write", authenticate, async (req, res) => {
  *
  * @route GET /api/sheets/budget
  * @security Bearer token required
+ * @param {string} req.body.spreadsheetId - Google Spreadsheet ID,
+ * @param {string} req.body.sheetName - Specific sheet name
+ * @param {string} req.body.beginningRow - Label and amount beginning row for variable expenses
+ * @param {string} req.body.endingRow - Label and amount ending row for variable expenses
  * @returns {string} 200 - HTML page with styled budget table
  * @returns {string} 404 - Current month column not found in spreadsheet
  * @returns {string} 500 - Server error or unable to read spreadsheet
  */
-router.get("/api/sheets/budget", authenticate, async (req, res) => {
-  try {
-    const spreadsheetId = "1PRbVPgAe_EIfxTcJH71T0NJeIugfwf99L8cUWxe1gFI";
-    const sheetName = "2026";
+router.post("/api/sheets/budget", authenticate, async (req, res) => {
+  const { spreadsheetId, sheetName, beginningRow, endingRow } = req.body;
 
+  try {
     console.log("[sheets/budget] Reading budget data for current month");
 
     const sheets = getSheetsClient();
 
     // Read rows 1 and 2 to find the current month column
     const headerResponse = await sheets.spreadsheets.values.get({
-      spreadsheetId,
+      spreadsheetId: spreadsheetId,
       range: `${sheetName}!A1:Z2`,
     });
 
@@ -233,10 +236,11 @@ router.get("/api/sheets/budget", authenticate, async (req, res) => {
     // 1. Column A rows 31-39: Category labels
     // 2. Current month column rows 30-38: Budget amounts
     const dataResponse = await sheets.spreadsheets.get({
-      spreadsheetId,
+      spreadsheetId: spreadsheetId,
       ranges: [
-        `${sheetName}!A31:A39`,
-        `${sheetName}!${monthColumnLetter}31:${monthColumnLetter}39`,
+        `${sheetName}!A${beginningRow}:A${endingRow}`,
+
+        `${sheetName}!${monthColumnLetter}${beginningRow}:${monthColumnLetter}${endingRow}`,
       ],
       includeGridData: true,
     });
