@@ -17,16 +17,20 @@ const getEnvVar = (key) => {
   return value;
 };
 
+const htmlError = (res, status, message) =>
+  res
+    .status(status)
+    .type("html")
+    .send(`<!DOCTYPE html><html><body><h1>Error ${status}</h1><p>${message}</p></body></html>`);
+
 const authenticate = (req, res, next) => {
   const expectedToken = process.env.SHORTCUTS_API_TOKEN;
   if (!expectedToken) {
-    return res
-      .status(500)
-      .json({ error: "Server misconfigured: missing SHORTCUTS_API_TOKEN." });
+    return htmlError(res, 500, "Server misconfigured: missing SHORTCUTS_API_TOKEN.");
   }
   const authHeader = req.headers.authorization || "";
   if (authHeader !== `Bearer ${expectedToken}`) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return htmlError(res, 401, "Unauthorized");
   }
   return next();
 };
@@ -78,9 +82,7 @@ app.post("/api/sheets/read", authenticate, async (req, res) => {
     const range = String(req.body?.range || "").trim();
 
     if (!spreadsheetId || !range) {
-      return res
-        .status(400)
-        .json({ error: "spreadsheetId and range are required." });
+      return htmlError(res, 400, "spreadsheetId and range are required.");
     }
 
     const sheets = getSheetsClient();
@@ -93,7 +95,7 @@ app.post("/api/sheets/read", authenticate, async (req, res) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unexpected server error.";
-    return res.status(500).json({ error: message });
+    return htmlError(res, 500, message);
   }
 });
 
@@ -106,15 +108,11 @@ app.post("/api/sheets/write", authenticate, async (req, res) => {
       String(req.body?.spreadsheetId || "").trim() || defaultSpreadsheetId;
 
     if (!spreadsheetId || !range) {
-      return res
-        .status(400)
-        .json({ error: "spreadsheetId and range are required." });
+      return htmlError(res, 400, "spreadsheetId and range are required.");
     }
 
     if (!Array.isArray(values) || values.length === 0) {
-      return res
-        .status(400)
-        .json({ error: "values must be a non-empty 2D array." });
+      return htmlError(res, 400, "values must be a non-empty 2D array.");
     }
 
     const sheets = getSheetsClient();
@@ -139,7 +137,7 @@ app.post("/api/sheets/write", authenticate, async (req, res) => {
   } catch (error) {
     const message =
       error instanceof Error ? error.message : "Unexpected server error.";
-    return res.status(500).json({ error: message });
+    return htmlError(res, 500, message);
   }
 });
 
@@ -158,9 +156,7 @@ const handleShortcutsWrite = async (req, res) => {
     });
 
     if (!description || !category || !amount || !dateInput) {
-      return res.status(400).json({
-        error: "description, category, amount, and date are required.",
-      });
+      return htmlError(res, 400, "description, category, amount, and date are required.");
     }
 
     const spreadsheetId = "1PRbVPgAe_EIfxTcJH71T0NJeIugfwf99L8cUWxe1gFI";
@@ -199,7 +195,7 @@ const handleShortcutsWrite = async (req, res) => {
     const message =
       error instanceof Error ? error.message : "Unexpected server error.";
     console.error("[shortcuts/write] Error", message);
-    return res.status(500).json({ error: message });
+    return htmlError(res, 500, message);
   }
 };
 
